@@ -1,17 +1,15 @@
 import argparse
-import pprint
-import re
-import sys
-from matplotlib import pyplot
-import seaborn
 import random
+import re
+import seaborn
+import sys
 from collections import defaultdict
+from dataclasses import dataclass
+from matplotlib import pyplot
 from matplotlib.ticker import StrMethodFormatter, MaxNLocator
 from RW_group import Group
 from RW_strengths import Strengths, History
-from itertools import zip_longest
-from dataclasses import dataclass
-from functools import reduce
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -67,7 +65,6 @@ def parse_args() -> argparse.Namespace:
 
     return args
 
-@dataclass
 class Phase:
     # elems contains a list of ([CS], US) of an experiment.
     elems : list[tuple[str, str]]
@@ -78,26 +75,25 @@ class Phase:
     # The lamda for this phase.
     lamda : None | float
 
+    # Return the set of single (one-character) CS.
     def cs(self):
         return set.union(*[set(x[0]) for x in self.elems])
 
-def parse_phase(phase : str) -> Phase:
-    rand = False
-    lamda = None
+    def __init__(self, phase_str : str):
+        self.rand = False
+        self.lamda = None
+        self.elems = []
 
-    elems = []
-    for part in phase.strip().split('/'):
-        if part == 'rand':
-            rand = True
-        elif (match := re.fullmatch(r'lamb?da *= *([0-9]*(?:\.[0-9]*)?)', part)) is not None:
-            lamda = float(match.group(1))
-        elif (match := re.fullmatch(r'([0-9]*)([A-Z]+)([+-]?)', part)) is not None:
-            num, cs, sign = match.groups()
-            elems += int(num or '1') * [(cs, sign or '+')]
-        else:
-            raise ValueError(f'Part not understood: {part}')
-
-    return Phase(elems, rand, lamda)
+        for part in phase_str.strip().split('/'):
+            if part == 'rand':
+                self.rand = True
+            elif (match := re.fullmatch(r'lamb?da *= *([0-9]*(?:\.[0-9]*)?)', part)) is not None:
+                self.lamda = float(match.group(1))
+            elif (match := re.fullmatch(r'([0-9]*)([A-Z]+)([+-]?)', part)) is not None:
+                num, cs, sign = match.groups()
+                self.elems += int(num or '1') * [(cs, sign or '+')]
+            else:
+                raise ValueError(f'Part not understood: {part}')
 
 def run_group_experiments(g : Group, experiment : list[Phase], num_trials : int) -> list[list[Strengths]]:
     results = []
@@ -172,7 +168,7 @@ def main():
     for e, experiment in enumerate(args.experiment_file.readlines()):
         name, *phases = experiment.split('|')
         name = name.strip()
-        phases = [parse_phase(phase) for phase in phases]
+        phases = [Phase(phase_str) for phase_str in phases]
 
         if name not in (args.plot_experiments or [name]):
             continue

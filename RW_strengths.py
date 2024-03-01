@@ -1,7 +1,7 @@
 from __future__ import annotations
-from itertools import combinations
-from functools import reduce
 from collections import deque
+from functools import reduce
+from itertools import combinations
 
 class Individual:
     assoc : float
@@ -43,9 +43,6 @@ class Individual:
     def __add__(self, other : Individual) -> Individual:
         return self.join(other, lambda a, b: a + b)
 
-    def __mul__(self, other : Individual) -> Individual:
-        return self.join(other, lambda a, b: a * b)
-
     def __truediv__(self, quot : int) -> Individual:
         ret = {}
         for prop in self.__dict__.keys():
@@ -60,20 +57,14 @@ class Individual:
 
         return Individual(**ret)
 
-    def __repr__(self):
-        return f'{self.assoc:g}'
-
     def copy(self) -> Individual:
         return Individual(**self.__dict__)
 
 class History:
     hist : list[Individual]
 
-    def __init__(self, ind : None | Individual = None):
+    def __init__(self):
         self.hist = []
-
-        if ind is not None:
-            self.add(ind)
 
     def add(self, ind : Individual):
         self.hist.append(ind.copy())
@@ -92,7 +83,7 @@ class Strengths:
         if s is None and cs is not None:
             s = {k: Individual() for k in cs}
 
-        # Weird order of diffs to make mypy happy.
+        # Weird order of ifs to make mypy happy.
         if cs is None or s is None:
             cs = set()
             s = {}
@@ -100,6 +91,7 @@ class Strengths:
         self.cs = set(cs)
         self.s = dict(s)
 
+    # fromHistories "transposes" a several histories of single CSs into a single list of many CSs.
     @staticmethod
     def fromHistories(histories : dict[str, History]) -> list[Strengths]:
         longest = max(len(x.hist) for x in histories.values())
@@ -114,6 +106,7 @@ class Strengths:
             for i in range(longest)
         ]
 
+    # combined_cs returns the whole list of CSs, including compound ones.
     def combined_cs(self) -> set[str]:
         h = set()
 
@@ -141,15 +134,13 @@ class Strengths:
         cs = self.cs | other.cs
         return Strengths(cs, {k: self[k] + other[k] for k in cs})
 
-    def __repr__(self):
-        return repr(self.s)
-
     def __truediv__(self, quot : int) -> Strengths:
         return Strengths(self.cs, {k: self.s[k] / quot for k in self.cs})
 
     def copy(self) -> Strengths:
         return Strengths(self.cs.copy(), {k: v.copy() for k, v in self.s.items()})
 
+    # Returns sum of associated values
     def Sigma(self):
         return sum(x.assoc for x in self.s.values())
 

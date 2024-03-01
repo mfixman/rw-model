@@ -1,7 +1,4 @@
 import math
-from collections import deque, defaultdict
-import numpy as np
-from itertools import combinations
 from RW_strengths import Strengths, History
 
 class Group:
@@ -76,6 +73,7 @@ class Group:
             error = 0.0000001
         return error
 
+    # compounds should probably be moved to Strengths.
     def compounds(self, part : str) -> set[str]:
         compounds = set(part)
         if self.use_configurals:
@@ -83,6 +81,9 @@ class Group:
 
         return compounds
 
+    # runPhase runs a single trial of a phase, in order, and returns a list of the Strength values
+    # of its CS at every step.
+    # It also modifies `self.s` to account for all the strengths modified in this phase.
     def runPhase(self, parts : list[tuple[str, str]], phase_lamda : None | float) -> list[Strengths]:
         hist = dict()
 
@@ -97,7 +98,8 @@ class Group:
 
             for cs in compounds:
                 if cs not in hist:
-                    hist[cs] = History(self.s[cs])
+                    hist[cs] = History()
+                    hist[cs].add(self.s[cs])
 
                 self.s[cs].alpha_mack = self.get_alpha_mack(cs)
                 self.s[cs].alpha_hall = self.get_alpha_hall(cs)
@@ -125,6 +127,7 @@ class Group:
                     self.s[cs].window.append(self.s[cs].assoc)
                     window_avg = sum(self.s[cs].window) / len(self.s[cs].window)
 
+                    # delta_ma_hall is modified using the previous associated value.
                     self.s[cs].delta_ma_hall = window_avg - hist[cs].assoc[-1]
 
                 hist[cs].add(self.s[cs])
