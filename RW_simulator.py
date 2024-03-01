@@ -48,7 +48,7 @@ def parse_args() -> argparse.Namespace:
     args, rest = parser.parse_known_args()
     args.alphas = dict()
     for arg in rest:
-        match = re.fullmatch('--alpha_([A-Z])\s*=?\s*([0-9]*\.?[0-9]*)', arg)
+        match = re.fullmatch('--alpha[-_]([A-Z])\s*=?\s*([0-9]*\.?[0-9]*)', arg)
         if not match:
             parser.error(f'Option not understood: {arg}')
 
@@ -119,10 +119,11 @@ def run_group_experiments(g : Group, experiment : list[Phase], num_trials : int)
                 final_strengths.append(g.s.copy())
 
             results.append([
-                reduce(lambda a, b: a + b, (h[x] for h in hist if x < len(h))) / num_trials
+                Strengths.avg([h[x] for h in hist if x < len(h)])
                 for x in range(max(len(h) for h in hist))
             ])
-            g.s = reduce(lambda a, b: a + b, final_strengths) / num_trials
+
+            g.s = Strengths.avg(final_strengths)
 
     return results
 

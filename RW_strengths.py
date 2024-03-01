@@ -132,7 +132,7 @@ class Strengths:
         return h
 
     # Get the individual values of either a single key (len(key) == 1), or
-    # the combined values of a combination of keys (product of values).
+    # the combined values of a combination of keys (sum of values).
     def __getitem__(self, key : str) -> Individual:
         assert len(set(key)) == len(key)
         return reduce(lambda a, b: a + b, [self.s[k] for k in key])
@@ -152,3 +152,13 @@ class Strengths:
 
     def Sigma(self):
         return sum(x.assoc for x in self.s.values())
+
+    @staticmethod
+    def avg(val : list[Strengths]) -> Strengths:
+        # We average doing `avg(X) = sum(X / n)` rather than `avg(X) = sum(X) / n`
+        # since assoc values could be truncated on summation.
+        val_quot = [x / len(val) for x in val]
+
+        # We use reduce rather than sum since we don't have a zero value.
+        # Python reduce is the equivalent of Haskell foldl1'.
+        return reduce(lambda a, b: a + b, val_quot)
