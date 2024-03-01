@@ -8,7 +8,7 @@ import random
 from collections import defaultdict
 from matplotlib.ticker import StrMethodFormatter, MaxNLocator
 from RW_group import Group
-from RW_strengths import Strengths
+from RW_strengths import Strengths, History
 from itertools import zip_longest
 
 def parse_args() -> argparse.Namespace:
@@ -93,46 +93,20 @@ def run_group_experiments(g, experiment : list[tuple[list[tuple[str, str]], None
 
     return results
 
-def plot_graphs(data: list[dict[str, Strengths]], plot_alphas = False):
+def plot_graphs(data: list[dict[str, History]], plot_alphas = False):
     seaborn.set()
     pyplot.ion()
 
-    print(data)
-    for e, (lines, alpha_lines, alpha_mack_lines, alpha_hall_lines) in enumerate(zip_longest(data, alpha_data, alpha_mack_data, alpha_hall_data), start=1):
-        if plot_alphas:
-            pyplot.figure(figsize=(16, 6))
+    for phase_num, experiments in enumerate(data):
+        pyplot.figure(figsize=(8, 6))
 
-            # Plot for associative strengths
-            ax1 = pyplot.subplot(1, 2, 1)
-            for val, points in lines.items():
-                ax1.plot(points, label=val, marker='D', markersize=4, alpha=.5)
-            ax1.set_xlabel('Trial Number')
-            ax1.set_ylabel('Associative Strength')
-            ax1.set_title(f'Phase {e} Associative Strengths')
-            ax1.legend()
+        for key, hist in experiments.items():
+            pyplot.plot(hist.assoc, label=key, marker='D', markersize=4, alpha=.5)
 
-            # Plot for alpha values
-            ax2 = pyplot.subplot(1, 2, 2)
-            for val, points_alpha in alpha_lines.items():
-                ax2.plot(points_alpha, label=f'Alpha_tot -- {val}', linestyle='--', marker='o', markersize=4, alpha=.5)
-            for val_mack, points_alpha_mack in alpha_mack_lines.items():
-                ax2.plot(points_alpha_mack, label=f'Alpha_mack -- {val_mack}', linestyle='--', marker='^', markersize=4, alpha=.5)
-            for val_hall, points_alpha_hall in alpha_hall_lines.items():
-                ax2.plot(points_alpha_hall, label=f'Alpha_hall -- {val_hall}', linestyle='--', marker='s', markersize=4, alpha=.5)
-            ax2.set_xlabel('Trial Number')
-            ax2.set_ylabel('Alpha Values')
-            ax2.set_title(f'Phase {e} Alpha Values')
-            ax2.legend()
-        else:
-            pyplot.figure(figsize=(8, 6))
-
-            # Plot for associative strengths
-            for val, points in lines.items():
-                pyplot.plot(points, label=val, marker='D', markersize=4, alpha=.5)
-            pyplot.gca().set_xlabel('Trial Number')
-            pyplot.gca().set_ylabel('Associative Strength')
-            pyplot.gca().set_title(f'Phase {e} Associative Strengths')
-            pyplot.legend()
+        pyplot.gca().set_xlabel('Trial Number')
+        pyplot.gca().set_ylabel('Associative Strength')
+        pyplot.gca().set_title(f'Phase {phase_num} Associative Strengths')
+        pyplot.legend()
 
         pyplot.tight_layout()
         pyplot.show()
@@ -156,15 +130,13 @@ def main():
         cs = set(''.join(y[0] for x in phases for y in x[0]))
         g = Group(name, args.alphas, args.beta_neg, args.beta, args.lamda, cs, args.use_configurals, args.adaptive_type, args.window_size, args.xi_hall)
 
-        for phase_num, strengths in enumerate(run_group_experiments(g, phases)):
+        for phase_num, strength_hist in enumerate(run_group_experiments(g, phases)):
             while len(groups_strengths) <= phase_num:
-                groups_strengths.append(defaultdict(lambda: []))
+                groups_strengths.append(defaultdict(lambda: History()))
 
-            for s in strengths:
-                # if name not in (args.plot_experiments or [name]) or cs not in (args.plot_stimuli or [cs]):
-                    # continue
-
-                groups_strengths[phase_num][name].append(s)
+            for strengths in strength_hist:
+                for cs in strengths.combined_cs():
+                    groups_strengths[phase_num][f'{name} - {cs}'].add(strengths[cs])
 
     plot_graphs(groups_strengths, args.plot_alphas)
 

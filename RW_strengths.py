@@ -43,8 +43,11 @@ class Individual:
 class History:
     hist : list[Individual]
 
-    def __init__(self, ind : Individual):
-        self.hist = [ind.copy()]
+    def __init__(self, ind : None | Individual = None):
+        self.hist = []
+
+        if ind is not None:
+            self.add(ind)
 
     def add(self, ind : Individual):
         self.hist.append(ind.copy())
@@ -102,18 +105,18 @@ class Strengths:
 
     # Get the individual values of either a single key (len(key) == 1), or
     # the combined values of a combination of keys (product of values).
-    def __getitem__(self, key):
+    def __getitem__(self, key : str) -> Individual:
         assert len(set(key)) == len(key)
-        return reduce(lambda a, b: a + b, [self.s.get(k, 0) for k in key])
+        return reduce(lambda a, b: a + b, [self.s[k] for k in key])
 
-    def __add__(self, other):
+    def __add__(self, other : Strengths) -> Strengths:
         cs = self.cs | other.cs
         return Strengths(cs, {k: self[k] + other[k] for k in cs})
 
     def __repr__(self):
         return repr(self.s)
 
-    def copy(self):
+    def copy(self) -> Strengths:
         return Strengths(self.cs.copy(), {k: v.copy() for k, v in self.s.items()})
 
     def Sigma(self):
