@@ -8,6 +8,7 @@ import random
 from collections import defaultdict
 from matplotlib.ticker import StrMethodFormatter, MaxNLocator
 from RW_group import Group
+from RW_strengths import Strengths
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -21,7 +22,6 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--use-configurals", type = bool, action = argparse.BooleanOptionalAction, help = 'Use compound stimuli with configural cues')
 
-    # parser.add_argument("--use-adaptive", type = bool, action = argparse.BooleanOptionalAction, help = 'Use adaptive attention mode')
     parser.add_argument("--adaptive-type", choices = ['linear', 'exponential', 'macknhall'], help = 'Type of adaptive attention mode to use')
     parser.add_argument("--window-size", type = int, default = None, help = 'Size of sliding window for adaptive learning')
 
@@ -62,7 +62,6 @@ def parse_args() -> argparse.Namespace:
 
     return args
 
-
 def parse_parts(phase : str) -> tuple[list[tuple[str, str]], None | float]:
     rand = False
     lamda = None
@@ -84,12 +83,12 @@ def parse_parts(phase : str) -> tuple[list[tuple[str, str]], None | float]:
 
     return parts, lamda
 
-def run_group_experiments(g : Group, experiment : list[tuple[list[tuple[str, str]], None | float]]) -> list[tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], dict[str,list[float]]]]:
+def run_group_experiments(g, experiment : list[tuple[list[tuple[str, str]], None | float]]) -> list[list[Strengths]]:
     results = []
 
-    for trial, (phase, phase_lamda) in enumerate(experiment):
-        V, A, A_mack, A_hall = g.runPhase(phase, phase_lamda)
-        results.append((V, A, A_mack, A_hall))
+    for trial, phase in enumerate(experiment):
+        strength_hist = g.runPhase(phase)
+        results.append(strength_hist)
 
     return results
 
@@ -155,13 +154,16 @@ def main():
         cs = set(''.join(y[0] for x in phases for y in x[0]))
         g = Group(name, args.alphas, args.beta_neg, args.beta, args.lamda, cs, args.use_configurals, args.adaptive_type, args.window_size, args.xi_hall)
 
-        for e, (strengths, alphas, alphas_mack, alphas_hall) in enumerate(run_group_experiments(g, phases)):
-            if len(groups_strengths) <= e:
+        for phase_num, strength_hist in enumerate(run_group_experiments(g, phases)):
+            while len(groups_strengths) <= phase_num:
                 groups_strengths.append({})
+            while len(alpha_values) <= phase_num:
+                alpha_values.append({})
 
-            groups_strengths[e] |= {
-                f'{name} - {k}': v
-                for k, v in strengths.items()
+            cs = strength_hist[0].combined_cs()
+            groups_strengths[phase_num] |= {
+                f'{name} - {k}': [strength[k].assoc for strength in strength_hist]
+                for k in cs
                 if (args.plot_experiments is None or name in args.plot_experiments) and
                    (args.plot_stimuli is None or k in args.plot_stimuli)
             }

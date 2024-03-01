@@ -1,7 +1,8 @@
 import math
 from collections import deque, defaultdict
-from itertools import combinations
 import numpy as np
+from itertools import combinations
+from RW_strengths import Strengths
 
 class Group:
     def __init__(self, name, alphas, betan, betap, lamda, cs = None, use_configurals = False, adaptive_type = None, window_size = None, xi_hall = None):
@@ -11,12 +12,14 @@ class Group:
             alphas = {k: alphas.get(k, initial_alpha) for k in cs | alphas.keys()}
 
         self.name = name
-        self.alphas_copy = alphas.copy()
-        self.alphas = self.alphas_copy
+        # self.alphas_copy = alphas.copy()
+        # self.alphas = self.alphas_copy
+
+        self.s = Strengths(cs)
 
         # self.delta_ma_hall is the difference of the moving averages used for Hall.
         # self.delta_ma_hall^n = V^n_{MA} - V^{n - 1}_{MA}
-        self.delta_ma_hall = {k: None for k in cs}
+        # self.delta_ma_hall = {k: None for k in cs}
         self.xi_hall = xi_hall
 
         self.betan = betan
@@ -32,6 +35,8 @@ class Group:
         # have a corresponding \alpha, then we calculate it as the product
         # of their simple stimuli.
         self.cs = [x for x in alphas.keys() if len(x) == 1]
+
+        # Do something with strengths and use_configurals.
         if use_configurals:
             simples = {k: v for k, v in alphas.items() if len(k) == 1}
             compounds = {
@@ -47,39 +52,7 @@ class Group:
             self.alphas = compounds | alphas
             self.cs = self.alphas.keys()
 
-        # Initially, alpha_mack and alpha_hall are identical.
-        if cs is not None:
-            self.alpha_mack = {k: 0.2 for k in cs}
-            self.alpha_hall = {k: 0.2 for k in cs}
-        else:
-            self.alpha_mack = {k: 0.2 for k in alphas.keys()}
-            self.alpha_hall = {k: 0.2 for k in alphas.keys()}
-
-        # The initial associative strength for all stimuli is 0.
-        self.assoc = {c: 0. for c in self.cs}
-
-    # This is a helper method that combines all stimuli into compound stimuli.
-    # If we are using configural cues, then these are added to the value and
-    # returned separately.
-    @staticmethod
-    def combine(V : dict[str, list[float]]) -> dict[str, list[float]]:
-        h = dict()
-
-        simples = {k: v for k, v in V.items() if len(k) == 1}
-        compounds = {k: v for k, v in V.items() if len(k) > 1}
-        for size in range(1, len(V) + 1):
-            for comb in combinations(simples.items(), size):
-                names = [x[0] for x in comb]
-                assocs = [x[1]for x in comb]
-                h[''.join(names)] = [min(1, sum(x)) for x in zip(*assocs)]
-
-        for k, v in compounds.items():
-            h[k] = [x + y for x, y in zip(h[k], v)]
-            h[f'c({k})'] = v
-
-        return h
-
-    def get_alpha_mack(self, cs : str) -> float:
+    def get_alpha_mack(self, cs):
         # This overflows -- ask Esther.
         # big_mack_error = sum(self.assoc.values()) / len(self.assoc) - self.assoc[cs]
         # return self.alpha_mack[cs] - big_mack_error
@@ -92,21 +65,21 @@ class Group:
         
         #return self.alpha_mack[cs] + 0.01*self.assoc[cs]
 
-        return self.alpha_mack[cs] + 0.01*(2*self.assoc[cs] - sum(self.assoc.values()))
+        return self.s[cs].alpha_mack + 0.01*(2*self.s[cs].assoc - self.s.Sigma())
 
     def get_alpha_hall(self, cs : str) -> None | float:
         if self.window_size is None:
             return None
 
-        delta_ma_hall = self.delta_ma_hall[cs]
+        delta_ma_hall = self.s[cs].delta_ma_hall
         if delta_ma_hall is None:
             delta_ma_hall = 0
 
         try:
-            error = self.xi_hall * self.alpha_hall[cs] * math.exp(- delta_ma_hall**2 / 2)
+            error = self.xi_hall * self.s[cs].alpha_hall * math.exp(- delta_ma_hall**2 / 2)
         except:
             error = 0.0000001
-        print(f"alpha_hall: {error}")
+        # print(f"alpha_hall: {error}")
         return error
 
     def compounds(self, part : str) -> set[str]:
@@ -116,65 +89,65 @@ class Group:
 
         return compounds
 
-    def runPhase(self, parts : list[tuple[str, str]], phase_lamda : None | float) -> tuple[dict[str, list[float]], dict[str, list[float]], dict[str, list[float]], dict[str,list[float]]]:
-        V = dict()
-        A = dict()
-
-        A_mack = dict()
-        A_hall = dict()
+    def runPhase(self, parts : list[tuple[str, str]], phase_lamda : None | float) -> list[Strengths]:
+        s_hist = [self.s.copy()]
+        last_hist = {cs: 0 for cs in self.s.cs}
 
         for part, plus in parts:
-            beta = self.betap
-            lamda = phase_lamda or self.lamda
-            sign = 1
-            if not plus == '+':
-                beta = self.betan
-                lamda = 0
-                sign = -1
+            if plus == '+':
+                beta, lamda, sign = self.betap, phase_lamda or self.lamda, 1
+            else:
+                beta, lamda, sign = self.betan, 0, -1
 
             compounds = self.compounds(part)
-            sigma = sum(self.assoc[x] for x in compounds)
-            for cs in compounds:
-                if cs not in V:
-                    V[cs] = [self.assoc[cs]]
-                    A[cs] = [self.alphas[cs]]
-                    A_mack[cs] = [self.alpha_mack[cs]]
-                    A_hall[cs] = [self.alpha_hall[cs]]
+            sigma = sum(self.s[x].assoc for x in compounds)
 
-                self.alpha_mack[cs] = self.get_alpha_mack(cs)
-                self.alpha_hall[cs] = self.get_alpha_hall(cs)
+            for cs in compounds:
+                self.s[cs].alpha_mack = self.get_alpha_mack(cs)
+                self.s[cs].alpha_hall = self.get_alpha_hall(cs)
                 
                 match self.adaptive_type:
                     case 'linear':
-                        self.alphas[cs] *= 1 + sign * 0.05
+                        self.s[cs].alpha *= 1 + sign * 0.05
                     case 'exponential':
                         if sign == 1:
-                            self.alphas[cs] *= (self.alphas[cs] ** 0.05) ** sign
+                            self.s[cs].alpha *= (self.s[cs].alpha ** 0.05) ** sign
                     case 'macknhall':
                         #print(lamda)
-                        self.alphas[cs] = (1-lamda+self.assoc[cs]) * self.alpha_mack[cs] + (lamda-self.assoc[cs]) * self.alpha_hall[cs]
-                        """delta_v_n = self.alpha_hall[cs] * beta * (lamda - sigma)
-                        v_n = self.alpha_mack[cs] * self.assoc[cs]
-                        self.assoc[cs] = v_n + delta_v_n"""
+                        self.s[cs].alpha = (1-lamda+self.s[cs].assoc) * self.s[cs].alpha_mack + (lamda-self.s[cs].assoc) * self.s[cs].alpha_hall
+                        """delta_v_n = self.s[cs].alpha_hall * beta * (lamda - sigma)
+                        v_n = self.s[cs].alpha_mack * self.s[cs].assoc
+                        self.s[cs].assoc = v_n + delta_v_n"""
 
-                print(f"DV: {self.alphas[cs] * beta * (lamda - sigma)}, Alpha: {self.alphas[cs]}, sigma: {sigma}")
-                self.assoc[cs] += self.alphas[cs] * beta * (lamda - sigma)
+                print(f"DV: {self.s[cs].alpha * beta * (lamda - sigma)}, Alpha: {self.s[cs].alpha}, sigma: {sigma}")
+                self.s[cs].assoc += self.s[cs].alpha * beta * (lamda - sigma)
 
+                # Redo this after being done with strengths.
+                """
                 if self.window_size is not None:
-                    if len(self.window[cs]) >= self.window_size:
-                        self.window[cs].popleft()
+                    if len(self.s[cs].window) >= self.window_size:
+                        self.s[cs].window.popleft()
 
-                    self.window[cs].append(self.assoc[cs])
+                    self.s[cs].window.append(self.s[cs].assoc)
 
-                    window_avg = sum(self.window[cs]) / len(self.window[cs])
+                    window_avg = sum(self.s[cs].window) / len(self.s[cs].window)
 
-                    self.delta_ma_hall[cs] = window_avg - V[cs][-1]
-                    V[cs].append(window_avg)
+                    self.s[cs].delta_ma_hall = window_avg - V[cs][-1]
+
+                    # I need to somehow adapt this to the separate Strengths
+                    # V[cs].append(window_avg)
+                    """
+
+                last_hist[cs] += 1
+                print(last_hist[cs])
+
+                if len(s_hist) <= last_hist[cs]:
+                    s_hist.append(Strengths({cs}, {cs: self.s[cs]}))
+                elif cs in s_hist[last_hist[cs]].s:
+                    s_hist[last_hist[cs]].s[cs] += self.s[cs]
                 else:
-                    V[cs].append(self.assoc[cs])
+                    s_hist[last_hist[cs]].s[cs] = self.s[cs]
 
-                A[cs].append(self.alphas[cs])
-                A_mack[cs].append(self.alpha_mack[cs])
-                A_hall[cs].append(self.alpha_hall[cs])
+            # s_hist.append(self.s.copy())
 
-        return self.combine(V), A, A_mack, A_hall
+        return s_hist
