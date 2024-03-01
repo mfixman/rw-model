@@ -98,15 +98,31 @@ def plot_graphs(data: list[dict[str, History]], plot_alphas = False):
     pyplot.ion()
 
     for phase_num, experiments in enumerate(data):
-        pyplot.figure(figsize=(8, 6))
+        if not plot_alphas:
+            fig, axes = pyplot.subplots(1, 1, figsize = (8, 6))
+            axes = [axes]
+        else:
+            fig, axes = pyplot.subplots(1, 2, figsize = (16, 6))
 
+        colors = dict(zip(experiments.keys(), seaborn.color_palette('husl', len(experiments))))
         for key, hist in experiments.items():
-            pyplot.plot(hist.assoc, label=key, marker='D', markersize=4, alpha=.5)
+            axes[0].plot(hist.assoc, label=key, marker='D', color = colors[key], markersize=4, alpha=.5)
 
-        pyplot.gca().set_xlabel('Trial Number')
-        pyplot.gca().set_ylabel('Associative Strength')
-        pyplot.gca().set_title(f'Phase {phase_num} Associative Strengths')
-        pyplot.legend()
+            if plot_alphas:
+                axes[1].plot(hist.alpha, label=key + r' - $\alpha$', color = colors[key], marker='D', markersize=8, alpha=.5)
+                axes[1].plot(hist.alpha_mack, label=key + r' - $\alpha_{MACK}$', color = colors[key], marker='$M$', markersize=8, alpha=.5)
+                axes[1].plot(hist.alpha_hall, label=key + r' - $\alpha_{HALL}$', color = colors[key], marker='$H$', markersize=8, alpha=.5)
+
+        axes[0].set_xlabel('Trial Number')
+        axes[0].set_ylabel('Associative Strength')
+        axes[0].set_title(f'Phase {phase_num} Associative Strengths')
+        axes[0].legend()
+
+        if plot_alphas:
+            axes[1].set_xlabel('Trial Number')
+            axes[1].set_ylabel('Alpha')
+            axes[1].set_title(f'Phase {phase_num} Alphas')
+            axes[1].legend()
 
         pyplot.tight_layout()
         pyplot.show()
@@ -118,11 +134,11 @@ def main():
     args = parse_args()
 
     groups_strengths = []
-    alpha_values = []
-    alpha_mack_values = []
-    alpha_hall_values = []
 
     for e, experiment in enumerate(args.experiment_file.readlines()):
+        if experiment not in (args.plot_experiments or [experiment]):
+            continue
+
         name, *phases = experiment.split('|')
         name = name.strip()
         phases = [parse_parts(phase) for phase in phases]
@@ -136,6 +152,9 @@ def main():
 
             for strengths in strength_hist:
                 for cs in strengths.combined_cs():
+                    if cs not in (args.plot_stimuli or [cs]):
+                        continue
+
                     groups_strengths[phase_num][f'{name} - {cs}'].add(strengths[cs])
 
     plot_graphs(groups_strengths, args.plot_alphas)
