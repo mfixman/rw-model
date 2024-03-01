@@ -7,32 +7,41 @@ class Individual:
     alpha : float
     alpha_mack : float
     alpha_hall : float
+
+    window : list[float]
     delta_ma_hall : float
 
-    def __init__(self, assoc = 0., alpha = .2, alpha_mack = .2, alpha_hall = .2, delta_ma_hall = .2):
+    def __init__(self, assoc = 0., alpha = .2, alpha_mack = .2, alpha_hall = .2, delta_ma_hall = .2, window = []):
         self.assoc = min(1., assoc)
 
         self.alpha = alpha
         self.alpha_mack = alpha_mack
         self.alpha_hall = alpha_hall
 
+        self.window = window
         self.delta_ma_hall = delta_ma_hall
 
+    def join(self, other : Individual, op) -> Individual:
+        ret = {}
+        for prop in self.__dict__.keys():
+            this = getattr(self, prop)
+            that = getattr(other, prop)
+
+            if type(this) is float or type(this) is int:
+                ret[prop] = op(this, that)
+            elif type(this) is list:
+                assert len(this) == len(that)
+                ret[prop] = [op(a, b) for a, b in zip(this, that)]
+            else:
+                raise ValueError(f'Unknown type {type(this)} for {prop}, which is equal to {this} and {that}')
+
+        return Individual(**ret)
+
     def __add__(self, other : Individual) -> Individual:
-        return Individual(
-            **{
-                prop: getattr(self, prop) + getattr(other, prop)
-                for prop in self.__dict__.keys()
-            }
-        )
+        return self.join(other, lambda a, b: a + b)
 
     def __mul__(self, other : Individual) -> Individual:
-        return Individual(
-            **{
-                prop: getattr(self, prop) * getattr(other, prop)
-                for prop in self.__dict__.keys()
-            }
-        )
+        return self.join(other, lambda a, b: a * b)
 
     def __repr__(self):
         return f'{self.assoc:g}'

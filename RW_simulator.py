@@ -97,7 +97,7 @@ def plot_graphs(data: list[dict[str, History]], plot_alphas = False):
     seaborn.set()
     pyplot.ion()
 
-    for phase_num, experiments in enumerate(data):
+    for phase_num, experiments in enumerate(data, start = 1):
         if not plot_alphas:
             fig, axes = pyplot.subplots(1, 1, figsize = (8, 6))
             axes = [axes]

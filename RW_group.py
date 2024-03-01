@@ -119,21 +119,14 @@ class Group:
                 print(f"DV: {self.s[cs].alpha * beta * (lamda - sigma)}, Alpha: {self.s[cs].alpha}, sigma: {sigma}")
                 self.s[cs].assoc += self.s[cs].alpha * beta * (lamda - sigma)
 
-                # Redo this after being done with strengths.
-                """
                 if self.window_size is not None:
                     if len(self.s[cs].window) >= self.window_size:
                         self.s[cs].window.popleft()
 
                     self.s[cs].window.append(self.s[cs].assoc)
-
                     window_avg = sum(self.s[cs].window) / len(self.s[cs].window)
 
-                    self.s[cs].delta_ma_hall = window_avg - V[cs][-1]
-
-                    # I need to somehow adapt this to the separate Strengths
-                    # V[cs].append(window_avg)
-                    """
+                    self.s[cs].delta_ma_hall = window_avg - hist[cs].assoc[-1]
 
                 hist[cs].add(self.s[cs])
 
