@@ -1,6 +1,7 @@
 from __future__ import annotations
 from itertools import combinations
 from functools import reduce
+from collections import deque
 
 class Individual:
     assoc : float
@@ -8,10 +9,12 @@ class Individual:
     alpha_mack : float
     alpha_hall : float
 
-    window : list[float]
+    window : deque[float]
     delta_ma_hall : float
 
-    def __init__(self, assoc = 0., alpha = .2, alpha_mack = .2, alpha_hall = .2, delta_ma_hall = .2, window = []):
+    def __init__(self, assoc = 0., alpha = .2, alpha_mack = .2, alpha_hall = .2, delta_ma_hall = .2, window = deque([])):
+        assert type(window) == deque
+
         self.assoc = min(1., assoc)
 
         self.alpha = alpha
@@ -29,9 +32,9 @@ class Individual:
 
             if type(this) is float or type(this) is int:
                 ret[prop] = op(this, that)
-            elif type(this) is list:
+            elif type(this) is deque:
                 assert len(this) == len(that)
-                ret[prop] = [op(a, b) for a, b in zip(this, that)]
+                ret[prop] = deque([op(a, b) for a, b in zip(this, that)])
             else:
                 raise ValueError(f'Unknown type {type(this)} for {prop}, which is equal to {this} and {that}')
 
@@ -50,8 +53,8 @@ class Individual:
 
             if type(this) is float or type(this) is int:
                 ret[prop] = this / quot
-            elif type(this) is list:
-                ret[prop] = [a / quot for a in this] # type: ignore
+            elif type(this) is deque:
+                ret[prop] = deque([a / quot for a in this]) # type: ignore
             else:
                 raise ValueError(f'Unknown type {type(this)} for {prop}, which is equal to {this}')
 

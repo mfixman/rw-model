@@ -119,8 +119,8 @@ def run_group_experiments(g : Group, experiment : list[Phase], num_trials : int)
                 final_strengths.append(g.s.copy())
 
             results.append([
-                reduce(lambda a, b: a + b, (h[x] for h in hist)) / num_trials
-                for x in range(len(phase.elems))
+                reduce(lambda a, b: a + b, (h[x] for h in hist if x < len(h))) / num_trials
+                for x in range(max(len(h) for h in hist))
             ])
             g.s = reduce(lambda a, b: a + b, final_strengths) / num_trials
 
@@ -169,12 +169,12 @@ def main():
     groups_strengths = []
 
     for e, experiment in enumerate(args.experiment_file.readlines()):
-        if experiment not in (args.plot_experiments or [experiment]):
-            continue
-
         name, *phases = experiment.split('|')
         name = name.strip()
         phases = [parse_phase(phase) for phase in phases]
+
+        if name not in (args.plot_experiments or [name]):
+            continue
 
         cs = set.union(*[x.cs() for x in phases])
         g = Group(name, args.alphas, args.beta_neg, args.beta, args.lamda, cs, args.use_configurals, args.adaptive_type, args.window_size, args.xi_hall)
