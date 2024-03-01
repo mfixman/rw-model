@@ -43,6 +43,20 @@ class Individual:
     def __mul__(self, other : Individual) -> Individual:
         return self.join(other, lambda a, b: a * b)
 
+    def __truediv__(self, quot : int) -> Individual:
+        ret = {}
+        for prop in self.__dict__.keys():
+            this = getattr(self, prop)
+
+            if type(this) is float or type(this) is int:
+                ret[prop] = this / quot
+            elif type(this) is list:
+                ret[prop] = [a / quot for a in this] # type: ignore
+            else:
+                raise ValueError(f'Unknown type {type(this)} for {prop}, which is equal to {this}')
+
+        return Individual(**ret)
+
     def __repr__(self):
         return f'{self.assoc:g}'
 
@@ -69,14 +83,16 @@ class Strengths:
     s : dict[str, Individual]
 
     def __init__(self, cs : None | set[str] = None, s : None | dict[str, Individual] = None):
-        if s is None and cs is not None:
-            s = {k: Individual() for k in cs}
-
         if cs is None and s is not None:
             cs = set(s.keys())
 
+        if s is None and cs is not None:
+            s = {k: Individual() for k in cs}
+
+        # Weird order of diffs to make mypy happy.
         if cs is None or s is None:
-            raise ValueError('Either cs or s have to have a value')
+            cs = set()
+            s = {}
 
         self.cs = set(cs)
         self.s = dict(s)
@@ -124,6 +140,9 @@ class Strengths:
 
     def __repr__(self):
         return repr(self.s)
+
+    def __truediv__(self, quot : int) -> Strengths:
+        return Strengths(self.cs, {k: self.s[k] / quot for k in self.cs})
 
     def copy(self) -> Strengths:
         return Strengths(self.cs.copy(), {k: v.copy() for k, v in self.s.items()})

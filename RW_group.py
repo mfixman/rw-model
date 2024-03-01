@@ -24,14 +24,13 @@ class Group:
         self.adaptive_type = adaptive_type
         self.window_size = window_size
 
-        self.window = defaultdict(lambda: deque())
-
         # For simplicity, if we use_configurals and some compound stimuli don't
         # have a corresponding \alpha, then we calculate it as the product
         # of their simple stimuli.
         self.cs = [x for x in alphas.keys() if len(x) == 1]
 
-        # Do something with strengths and use_configurals.
+        # use_configurals is not working with strengths - add it later.
+        '''
         if use_configurals:
             simples = {k: v for k, v in alphas.items() if len(k) == 1}
             compounds = {
@@ -46,6 +45,7 @@ class Group:
             }
             self.alphas = compounds | alphas
             self.cs = self.alphas.keys()
+        '''
 
     def get_alpha_mack(self, cs):
         # This overflows -- ask Esther.
@@ -97,7 +97,6 @@ class Group:
 
             for cs in compounds:
                 if cs not in hist:
-                    print(f'Initial value for {cs} is {self.s[cs].assoc}')
                     hist[cs] = History(self.s[cs])
 
                 self.s[cs].alpha_mack = self.get_alpha_mack(cs)
@@ -116,7 +115,7 @@ class Group:
                         v_n = self.s[cs].alpha_mack * self.s[cs].assoc
                         self.s[cs].assoc = v_n + delta_v_n"""
 
-                print(f"DV: {self.s[cs].alpha * beta * (lamda - sigma)}, Alpha: {self.s[cs].alpha}, sigma: {sigma}")
+                # print(f"DV: {self.s[cs].alpha * beta * (lamda - sigma)}, Alpha: {self.s[cs].alpha}, sigma: {sigma}")
                 self.s[cs].assoc += self.s[cs].alpha * beta * (lamda - sigma)
 
                 if self.window_size is not None:

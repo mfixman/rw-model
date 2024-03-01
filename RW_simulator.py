@@ -10,6 +10,8 @@ from matplotlib.ticker import StrMethodFormatter, MaxNLocator
 from RW_group import Group
 from RW_strengths import Strengths, History
 from itertools import zip_longest
+from dataclasses import dataclass
+from functools import reduce
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -27,6 +29,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--window-size", type = int, default = None, help = 'Size of sliding window for adaptive learning')
 
     parser.add_argument("--xi-hall", type = float, default = 0.2, help = 'Xi parameter for Hall alpha calculation')
+
+    parser.add_argument("--num-trials", type = int, default = 1000, help = 'Amount of trials done in randomised phases')
 
     parser.add_argument("--plot-experiments", nargs = '*', help = 'List of experiments to plot. By default plot everything')
     parser.add_argument("--plot-stimuli", nargs = '*', help = 'List of stimuli, compound and simple, to plot. By default plot everything')
@@ -63,11 +67,25 @@ def parse_args() -> argparse.Namespace:
 
     return args
 
-def parse_parts(phase : str) -> tuple[list[tuple[str, str]], None | float]:
+@dataclass
+class Phase:
+    # elems contains a list of ([CS], US) of an experiment.
+    elems : list[tuple[str, str]]
+
+    # Whether this phase should be randomised.
+    rand : bool
+
+    # The lamda for this phase.
+    lamda : None | float
+
+    def cs(self):
+        return set.union(*[set(x[0]) for x in self.elems])
+
+def parse_phase(phase : str) -> Phase:
     rand = False
     lamda = None
 
-    parts = []
+    elems = []
     for part in phase.strip().split('/'):
         if part == 'rand':
             rand = True
@@ -75,21 +93,36 @@ def parse_parts(phase : str) -> tuple[list[tuple[str, str]], None | float]:
             lamda = float(match.group(1))
         elif (match := re.fullmatch(r'([0-9]*)([A-Z]+)([+-]?)', part)) is not None:
             num, cs, sign = match.groups()
-            parts += int(num or '1') * [(cs, sign or '+')]
+            elems += int(num or '1') * [(cs, sign or '+')]
         else:
             raise ValueError(f'Part not understood: {part}')
 
-    if rand:
-        random.shuffle(parts)
+    return Phase(elems, rand, lamda)
 
-    return parts, lamda
-
-def run_group_experiments(g, experiment : list[tuple[list[tuple[str, str]], None | float]]) -> list[list[Strengths]]:
+def run_group_experiments(g : Group, experiment : list[Phase], num_trials : int) -> list[list[Strengths]]:
     results = []
 
-    for trial, (phase, phase_lamda) in enumerate(experiment):
-        strength_hist = g.runPhase(phase, phase_lamda)
-        results.append(strength_hist)
+    for trial, phase in enumerate(experiment):
+        if not phase.rand:
+            strength_hist = g.runPhase(phase.elems, phase.lamda)
+            results.append(strength_hist)
+        else:
+            initial_strengths = g.s.copy()
+            final_strengths = []
+            hist = []
+
+            for trial in range(num_trials):
+                random.shuffle(phase.elems)
+
+                g.s = initial_strengths.copy()
+                hist.append(g.runPhase(phase.elems, phase.lamda))
+                final_strengths.append(g.s.copy())
+
+            results.append([
+                reduce(lambda a, b: a + b, (h[x] for h in hist)) / num_trials
+                for x in range(len(phase.elems))
+            ])
+            g.s = reduce(lambda a, b: a + b, final_strengths) / num_trials
 
     return results
 
@@ -141,12 +174,12 @@ def main():
 
         name, *phases = experiment.split('|')
         name = name.strip()
-        phases = [parse_parts(phase) for phase in phases]
+        phases = [parse_phase(phase) for phase in phases]
 
-        cs = set(''.join(y[0] for x in phases for y in x[0]))
+        cs = set.union(*[x.cs() for x in phases])
         g = Group(name, args.alphas, args.beta_neg, args.beta, args.lamda, cs, args.use_configurals, args.adaptive_type, args.window_size, args.xi_hall)
 
-        for phase_num, strength_hist in enumerate(run_group_experiments(g, phases)):
+        for phase_num, strength_hist in enumerate(run_group_experiments(g, phases, args.num_trials)):
             while len(groups_strengths) <= phase_num:
                 groups_strengths.append(defaultdict(lambda: History()))
 
