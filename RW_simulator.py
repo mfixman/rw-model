@@ -9,6 +9,7 @@ from collections import defaultdict
 from matplotlib.ticker import StrMethodFormatter, MaxNLocator
 from RW_group import Group
 from RW_strengths import Strengths
+from itertools import zip_longest
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -86,17 +87,18 @@ def parse_parts(phase : str) -> tuple[list[tuple[str, str]], None | float]:
 def run_group_experiments(g, experiment : list[tuple[list[tuple[str, str]], None | float]]) -> list[list[Strengths]]:
     results = []
 
-    for trial, phase in enumerate(experiment):
-        strength_hist = g.runPhase(phase)
+    for trial, (phase, phase_lamda) in enumerate(experiment):
+        strength_hist = g.runPhase(phase, phase_lamda)
         results.append(strength_hist)
 
     return results
 
-def plot_graphs(data: list[dict[str, list[int]]], alpha_data: list[dict[str, list[float]]], alpha_mack_data: list[dict[str, list[float]]], alpha_hall_data: list[dict[str, list[float]]], plot_alphas = False):
+def plot_graphs(data: list[dict[str, Strengths]], plot_alphas = False):
     seaborn.set()
     pyplot.ion()
 
-    for e, (lines, alpha_lines, alpha_mack_lines, alpha_hall_lines) in enumerate(zip(data, alpha_data, alpha_mack_data, alpha_hall_data), start=1):
+    print(data)
+    for e, (lines, alpha_lines, alpha_mack_lines, alpha_hall_lines) in enumerate(zip_longest(data, alpha_data, alpha_mack_data, alpha_hall_data), start=1):
         if plot_alphas:
             pyplot.figure(figsize=(16, 6))
 
@@ -154,51 +156,17 @@ def main():
         cs = set(''.join(y[0] for x in phases for y in x[0]))
         g = Group(name, args.alphas, args.beta_neg, args.beta, args.lamda, cs, args.use_configurals, args.adaptive_type, args.window_size, args.xi_hall)
 
-        for phase_num, strength_hist in enumerate(run_group_experiments(g, phases)):
+        for phase_num, strengths in enumerate(run_group_experiments(g, phases)):
             while len(groups_strengths) <= phase_num:
-                groups_strengths.append({})
-            while len(alpha_values) <= phase_num:
-                alpha_values.append({})
+                groups_strengths.append(defaultdict(lambda: []))
 
-            cs = strength_hist[0].combined_cs()
-            groups_strengths[phase_num] |= {
-                f'{name} - {k}': [strength[k].assoc for strength in strength_hist]
-                for k in cs
-                if (args.plot_experiments is None or name in args.plot_experiments) and
-                   (args.plot_stimuli is None or k in args.plot_stimuli)
-            }
+            for s in strengths:
+                # if name not in (args.plot_experiments or [name]) or cs not in (args.plot_stimuli or [cs]):
+                    # continue
 
-            if len(alpha_values) <= e:
-                alpha_values.append({})
+                groups_strengths[phase_num][name].append(s)
 
-            if len(alpha_mack_values) <= e:
-                alpha_mack_values.append({})            
-
-            if len(alpha_hall_values) <= e:
-                alpha_hall_values.append({})
-
-            alpha_values[e] |= {
-                f'{name} - {k}': v
-                for k, v in alphas.items()
-                if (args.plot_experiments is None or name in args.plot_experiments) and
-                   (args.plot_stimuli is None or k in args.plot_stimuli)
-            }
-
-            alpha_mack_values[e] |= {
-                f'{name} - {k}': v
-                for k, v in alphas_mack.items()
-                if (args.plot_experiments is None or name in args.plot_experiments) and
-                   (args.plot_stimuli is None or k in args.plot_stimuli)
-            }
-
-            alpha_hall_values[e] |= {
-                f'{name} - {k}': v
-                for k, v in alphas_hall.items()
-                if (args.plot_experiments is None or name in args.plot_experiments) and
-                   (args.plot_stimuli is None or k in args.plot_stimuli)
-            }
-
-    plot_graphs(groups_strengths, alpha_values, alpha_mack_values, alpha_hall_values, args.plot_alphas)
+    plot_graphs(groups_strengths, args.plot_alphas)
 
 if __name__ == '__main__':
     main()

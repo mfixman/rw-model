@@ -3,9 +3,14 @@ from itertools import combinations
 from functools import reduce
 
 class Individual:
-    def __init__(self, assoc = 0, alpha = .2, alpha_mack = .2, alpha_hall = .2, delta_ma_hall = .2):
-        self.assoc = assoc
-        self.assoc = min(1., self.assoc)
+    assoc : float
+    alpha : float
+    alpha_mack : float
+    alpha_hall : float
+    delta_ma_hall : float
+
+    def __init__(self, assoc = 0., alpha = .2, alpha_mack = .2, alpha_hall = .2, delta_ma_hall = .2):
+        self.assoc = min(1., assoc)
 
         self.alpha = alpha
         self.alpha_mack = alpha_mack
@@ -14,41 +19,69 @@ class Individual:
         self.delta_ma_hall = delta_ma_hall
 
     def __add__(self, other : Individual) -> Individual:
-        ret = Individual()
-        for prop in self.__dict__.keys():
-            setattr(ret, prop, self.__dict__[prop] + other.__dict__[prop])
-
-        ret.assoc = min(1., self.assoc)
-
-        return ret
+        return Individual(
+            **{
+                prop: getattr(self, prop) + getattr(other, prop)
+                for prop in self.__dict__.keys()
+            }
+        )
 
     def __mul__(self, other : Individual) -> Individual:
-        ret = Individual()
-        for prop in self.__dict__.keys():
-            setattr(ret, prop, self.__dict__[prop] + other.__dict__[prop])
-
-        ret.assoc = min(1., self.assoc)
-
-        return ret
+        return Individual(
+            **{
+                prop: getattr(self, prop) * getattr(other, prop)
+                for prop in self.__dict__.keys()
+            }
+        )
 
     def __repr__(self):
         return f'{self.assoc:g}'
 
     def copy(self) -> Individual:
-        ret = Individual()
-        for key, val in self.__dict__.items():
-            setattr(ret, key, val)
+        return Individual(**self.__dict__)
 
-        return ret
+class History:
+    hist : list[Individual]
+
+    def __init__(self, ind : Individual):
+        self.hist = [ind.copy()]
+
+    def add(self, ind : Individual):
+        self.hist.append(ind.copy())
+
+    def __getattr__(self, key):
+        return [getattr(p, key) for p in self.hist]
 
 class Strengths:
-    # Add a way to initialise this with set values.
-    def __init__(self, cs : set[str], s : None | dict[str, Individual] = None):
-        if s is None:
+    cs : set[str]
+    s : dict[str, Individual]
+
+    def __init__(self, cs : None | set[str] = None, s : None | dict[str, Individual] = None):
+        if s is None and cs is not None:
             s = {k: Individual() for k in cs}
 
-        self.cs = cs
-        self.s = s
+        if cs is None and s is not None:
+            cs = set(s.keys())
+
+        if cs is None or s is None:
+            raise ValueError('Either cs or s have to have a value')
+
+        self.cs = set(cs)
+        self.s = dict(s)
+
+    @staticmethod
+    def fromHistories(histories : dict[str, History]) -> list[Strengths]:
+        longest = max(len(x.hist) for x in histories.values())
+        return [
+            Strengths(
+                s = {
+                    cs: h.hist[i]
+                    for cs, h in histories.items()
+                    if len(h.hist) > i
+                }
+            )
+            for i in range(longest)
+        ]
 
     def combined_cs(self) -> set[str]:
         h = set()
@@ -71,7 +104,7 @@ class Strengths:
     # the combined values of a combination of keys (product of values).
     def __getitem__(self, key):
         assert len(set(key)) == len(key)
-        return reduce(lambda a, b: a * b, [self.s.get(k, 0) for k in key])
+        return reduce(lambda a, b: a + b, [self.s.get(k, 0) for k in key])
 
     def __add__(self, other):
         cs = self.cs | other.cs

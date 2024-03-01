@@ -2,24 +2,19 @@ import math
 from collections import deque, defaultdict
 import numpy as np
 from itertools import combinations
-from RW_strengths import Strengths
+from RW_strengths import Strengths, History
 
 class Group:
     def __init__(self, name, alphas, betan, betap, lamda, cs = None, use_configurals = False, adaptive_type = None, window_size = None, xi_hall = None):
         # If some alphas don't appear, set their alpha to 0.
         if cs is not None:
-            initial_alpha = 0.2 if adaptive_type is not 'macknhall' else 0
+            initial_alpha = 0.2 if adaptive_type != 'macknhall' else 0
             alphas = {k: alphas.get(k, initial_alpha) for k in cs | alphas.keys()}
 
         self.name = name
-        # self.alphas_copy = alphas.copy()
-        # self.alphas = self.alphas_copy
 
         self.s = Strengths(cs)
 
-        # self.delta_ma_hall is the difference of the moving averages used for Hall.
-        # self.delta_ma_hall^n = V^n_{MA} - V^{n - 1}_{MA}
-        # self.delta_ma_hall = {k: None for k in cs}
         self.xi_hall = xi_hall
 
         self.betan = betan
@@ -67,9 +62,9 @@ class Group:
 
         return self.s[cs].alpha_mack + 0.01*(2*self.s[cs].assoc - self.s.Sigma())
 
-    def get_alpha_hall(self, cs : str) -> None | float:
+    def get_alpha_hall(self, cs : str) -> float:
         if self.window_size is None:
-            return None
+            return 0
 
         delta_ma_hall = self.s[cs].delta_ma_hall
         if delta_ma_hall is None:
@@ -79,7 +74,6 @@ class Group:
             error = self.xi_hall * self.s[cs].alpha_hall * math.exp(- delta_ma_hall**2 / 2)
         except:
             error = 0.0000001
-        # print(f"alpha_hall: {error}")
         return error
 
     def compounds(self, part : str) -> set[str]:
@@ -90,8 +84,7 @@ class Group:
         return compounds
 
     def runPhase(self, parts : list[tuple[str, str]], phase_lamda : None | float) -> list[Strengths]:
-        s_hist = [self.s.copy()]
-        last_hist = {cs: 0 for cs in self.s.cs}
+        hist = dict()
 
         for part, plus in parts:
             if plus == '+':
@@ -103,6 +96,10 @@ class Group:
             sigma = sum(self.s[x].assoc for x in compounds)
 
             for cs in compounds:
+                if cs not in hist:
+                    print(f'Initial value for {cs} is {self.s[cs].assoc}')
+                    hist[cs] = History(self.s[cs])
+
                 self.s[cs].alpha_mack = self.get_alpha_mack(cs)
                 self.s[cs].alpha_hall = self.get_alpha_hall(cs)
                 
@@ -138,16 +135,6 @@ class Group:
                     # V[cs].append(window_avg)
                     """
 
-                last_hist[cs] += 1
-                print(last_hist[cs])
+                hist[cs].add(self.s[cs])
 
-                if len(s_hist) <= last_hist[cs]:
-                    s_hist.append(Strengths({cs}, {cs: self.s[cs]}))
-                elif cs in s_hist[last_hist[cs]].s:
-                    s_hist[last_hist[cs]].s[cs] += self.s[cs]
-                else:
-                    s_hist[last_hist[cs]].s[cs] = self.s[cs]
-
-            # s_hist.append(self.s.copy())
-
-        return s_hist
+        return Strengths.fromHistories(hist)
