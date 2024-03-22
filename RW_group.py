@@ -69,10 +69,11 @@ class Group:
         if delta_ma_hall is None:
             delta_ma_hall = 0
 
-        try:
-            error = (((1-abs(lamda-sigma)) * self.s[cs].alpha_hall * (1-self.xi_hall*math.exp(-delta_ma_hall**2 / 2)))+abs(lamda-sigma))/2
-        except:
-            error = ((1-abs(lamda-sigma))*self.s[cs].alpha_hall + abs(lamda-sigma))/2
+        error = 1/2 * (1 - abs(lamda - sigma) * self.s[cs].alpha_hall * (1 - self.xi_hall * math.exp(1/2 * -delta_ma_hall ** 2) + abs(lamda - sigma)))
+        # try:
+        # error = (((1-abs(lamda-sigma)) * self.s[cs].alpha_hall * (1-self.xi_hall*math.exp(-delta_ma_hall**2 / 2)))+abs(lamda-sigma))/2
+        # except:
+        # error = ((1-abs(lamda-sigma))*self.s[cs].alpha_hall + abs(lamda-sigma))/2
 
         return error
 
@@ -114,14 +115,9 @@ class Group:
                         if sign == 1:
                             self.s[cs].alpha *= (self.s[cs].alpha ** 0.05) ** sign
                     case 'macknhall':
-                        #self.s[cs].alpha = (1 - lamda + sigma) * self.s[cs].alpha_mack + (lamda - sigma) * self.s[cs].alpha_hall
                         self.s[cs].alpha = (lamda - sigma) * self.s[cs].alpha_hall
 
-
-                # print(f"DV: {self.s[cs].alpha * beta * (lamda - sigma)}, Alpha: {self.s[cs].alpha}, sigma: {sigma}")
-                #self.s[cs].assoc += self.s[cs].alpha * beta * (lamda - sigma)
-                self.s[cs].assoc = self.s[cs].assoc*self.s[cs].alpha_mack + self.s[cs].alpha * beta * (lamda - sigma)
-
+                self.s[cs].assoc = self.s[cs].assoc * self.s[cs].alpha_mack + self.s[cs].alpha
 
                 if self.window_size is not None:
                     if len(self.s[cs].window) >= self.window_size:
