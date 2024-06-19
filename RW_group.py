@@ -1,6 +1,7 @@
 import math
 from itertools import combinations
 from RW_strengths import Strengths, History, Individual
+from RW_adaptive_types import StepFuncs
 
 class Group:
     name : str
@@ -15,7 +16,6 @@ class Group:
     prev_lamda : float
 
     use_configurals : bool
-    adaptive_type : None | str
 
     window_size : None | int
     xi_hall : None | float
@@ -42,8 +42,9 @@ class Group:
         self.thetaE = thetaE
         self.thetaI = thetaI
 
+        self.step = StepFuncs[adaptive_type]
+
         self.use_configurals = use_configurals
-        self.adaptive_type = adaptive_type
         self.window_size = window_size
 
         self.prev_lamda = 0
@@ -139,116 +140,3 @@ class Group:
             self.prev_lamda = lamda
 
         return Strengths.fromHistories(hist)
-
-    def step(self, cs: str, beta: float, lamda: float, sign: int, sigma: float, sigmaE: float, sigmaI: float):
-        delta_v_factor = beta * (self.prev_lamda - sigma)
-
-        match self.adaptive_type:
-            case 'linear':
-                self.s[cs].alpha *= 1 + sign * 0.05
-                self.s[cs].assoc += self.s[cs].alpha * delta_v_factor
-
-            case 'exponential':
-                if sign == 1:
-                    self.s[cs].alpha *= (self.s[cs].alpha ** 0.05) ** sign
-                self.s[cs].assoc += self.s[cs].alpha * delta_v_factor
-
-            case 'mack':
-                self.s[cs].alpha_mack = self.get_alpha_mack(cs, sigma)
-                self.s[cs].alpha = self.s[cs].alpha_mack
-                self.s[cs].assoc += self.s[cs].alpha * delta_v_factor
-
-            case 'hall':
-                self.s[cs].alpha_hall = self.get_alpha_hall(cs, sigma, self.prev_lamda)
-                self.s[cs].alpha = self.s[cs].alpha_hall
-                delta_v_factor = 0.5 * abs(self.prev_lamda)
-                self.s[cs].assoc += self.s[cs].alpha * delta_v_factor
-
-            case 'macknhall':
-                self.s[cs].alpha_mack = self.get_alpha_mack(cs, sigma)
-                self.s[cs].alpha_hall = self.get_alpha_hall(cs, sigma, self.prev_lamda)
-                self.s[cs].alpha = (1 - abs(self.prev_lamda - sigma)) * self.s[cs].alpha_mack + self.s[cs].alpha_hall
-                self.s[cs].assoc += self.s[cs].alpha * delta_v_factor
-
-            case 'dualV':
-                # Ask Esther whether this is lamda^{n + 1) or lamda^n.
-                rho = lamda - (sigmaE - sigmaI)
-
-                if rho >= 0:
-                    self.s[cs].Ve += self.betap * self.s[cs].alpha * lamda
-                else:
-                    self.s[cs].Vi += self.betan * self.s[cs].alpha * abs(rho)
-
-                self.s[cs].alpha = self.gamma * abs(rho) + (1 - self.gamma) * self.s[cs].alpha
-                self.s[cs].assoc = self.s[cs].Ve - self.s[cs].Vi
-
-                print(f'{cs}:\t𝛒 = {rho: .3f}; Ve = {self.s[cs].Ve:.3f}; Vi = {self.s[cs].Vi:.3f}')
-
-            case 'lepelley':
-                rho = lamda - (sigmaE - sigmaI)
-
-                VXe = sigmaE - self.s[cs].Ve
-                VXi = sigmaI - self.s[cs].Vi
-
-                DVe = 0.
-                DVi = 0.
-                if rho >= 0:
-                    DVe = self.s[cs].alpha * self.betap * (1 - self.s[cs].Ve + self.s[cs].Vi) * abs(rho)
-
-                    if rho > 0:
-                        self.s[cs].alpha += -self.thetaE * (abs(lamda - self.s[cs].Ve + self.s[cs].Vi) - abs(lamda - VXe + VXi))
-                else:
-                    DVi = self.s[cs].alpha * self.betan * (1 - self.s[cs].Vi + self.s[cs].Ve) * abs(rho)
-                    self.s[cs].alpha += -self.thetaI * (abs(abs(rho) - self.s[cs].Vi + self.s[cs].Ve) - abs(abs(rho) - VXi + VXe))
-
-                self.s[cs].alpha = min(max(self.s[cs].alpha, 0.05), 1)
-                self.s[cs].Ve += DVe
-                self.s[cs].Vi += DVi
-
-                self.s[cs].assoc = self.s[cs].Ve - self.s[cs].Vi
-
-            case 'dualmack':
-                rho = lamda - (sigmaE - sigmaI)
-
-                VXe = sigmaE - self.s[cs].Ve
-                VXi = sigmaI - self.s[cs].Vi
-
-                if rho >= 0:
-                    self.s[cs].Ve += self.s[cs].alpha * self.betap * (1 - self.s[cs].Ve + self.s[cs].Vi) * abs(rho)
-                else:
-                    self.s[cs].Vi += self.s[cs].alpha * self.betan * (1 - self.s[cs].Vi + self.s[cs].Ve) * abs(rho)
-
-                self.s[cs].alpha = 1/2 * (1 + self.s[cs].assoc - (VXe - VXi))
-                self.s[cs].assoc = self.s[cs].Ve - self.s[cs].Vi
-
-            case 'hybrid':
-                rho = lamda - (sigmaE - sigmaI)
-
-                NVe = 0.
-                NVi = 0.
-                if rho >= 0:
-                    NVe = self.s[cs].alpha_mack * self.s[cs].Ve + self.betap * self.s[cs].alpha_hall * lamda
-                    NVi = self.s[cs].Vi
-                else:
-                    NVe = self.s[cs].Ve
-                    NVi = self.s[cs].alpha_mack * self.s[cs].Vi + self.betan * self.s[cs].alpha_hall * abs(rho)
-
-                VXe = sigmaE - self.s[cs].Ve
-                VXi = sigmaI - self.s[cs].Vi
-                if rho > 0:
-                    self.s[cs].alpha_mack += -self.thetaE * (abs(lamda - self.s[cs].Ve + self.s[cs].Vi) - abs(lamda - VXe + VXi))
-                elif rho < 0:
-                    self.s[cs].alpha_mack += -self.thetaI * (abs(abs(rho) - self.s[cs].Vi + self.s[cs].Ve) - abs(abs(rho) - VXi + VXe))
-
-                self.s[cs].alpha_mack = min(max(self.s[cs].alpha_mack, 0.05), 1)
-                self.s[cs].alpha_hall = self.gamma * abs(rho) + (1 - self.gamma) * self.s[cs].alpha_hall
-
-                self.s[cs].Ve = NVe
-                self.s[cs].Vi = NVi
-
-                self.s[cs].assoc = self.s[cs].Ve - self.s[cs].Vi
-
-                print(f'{cs}:\t𝛒 = {rho: .3f}; Ve = {self.s[cs].Ve:.3f}; Vi = {self.s[cs].Vi:.3f}')
-
-            case _:
-                raise NameError(f'Unknown adaptive type {self.adaptive_type}!')
